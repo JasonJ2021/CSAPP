@@ -78,7 +78,8 @@ touch3()地址 $0x004018fa
 我们查询到pop %rax 字节序列为58 90 
 找到代码碎片地址 0x004019ab  
 然后填充8个字节cookie ,再返回到代码碎片 movq %rax,%rdi ,对应地址为0x004889c7
-![栈结构](https://github.com/JasonJ2021/CSAPP/blob/main/AttackLab/picture/answer4.jpg)
+![栈结构](https://github.com/JasonJ2021/CSAPP/blob/main/AttackLab/picture/answer4.jpg)  
+
 最终的字节序列为
 
     30 30 30 30 30 30 30 30 30 30
@@ -92,7 +93,8 @@ touch3()地址 $0x004018fa
 
 ## answer5:
 最后一个任务实现与phase_3差不多，栈结构如下：
-![栈结构](https://github.com/JasonJ2021/CSAPP/blob/main/AttackLab/picture/answer5.jpg)
+![栈结构](https://github.com/JasonJ2021/CSAPP/blob/main/AttackLab/picture/answer5.jpg)  
+
 最终的字节序列为
 
     51 51 51 51 51 51 51 51 51 51
