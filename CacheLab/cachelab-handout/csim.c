@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
+
 typedef struct
 {
     int valid;
@@ -11,6 +13,7 @@ typedef struct
     int time;
 } cache;
 int hexTodec(char *hex);
+void load(unsigned int address, unsigned int b, unsigned s, cache *set, unsigned E, int time);
 int flag = 0;
 int miss_count = 0;
 int hit_count = 0;
@@ -28,12 +31,12 @@ int main(int argc, char *argv[])
     int opt;
     char *fileloc;
     cache *set; //代表高速缓存组
-    while ((opt = getopt(argc, argv, "hvsEbt")) != -1)
+    while ((opt = getopt(argc, argv, "hvs:E:-b:-t:")) != -1)
     {
         switch (opt)
         {
         case 'h':
-            printf(usage);
+            printf("%s", usage);
             break;
         case 'v':
             flag = 1;
@@ -59,6 +62,12 @@ int main(int argc, char *argv[])
     FILE *file = NULL;
     file = fopen(fileloc, "r");
     set = (cache *)malloc(sizeof(cache) * S * E);
+    for (cache *node = set; node < set + S * E; node++)
+    {
+        node->marked = 0;
+        node->time = 0;
+        node->valid = 0;
+    }
     char *temp = (char *)malloc(20);
     int time = 0;
     //比如地址为7fefe059c ->十进制
@@ -68,29 +77,40 @@ int main(int argc, char *argv[])
             continue;
         if (flag)
         {
-            printf(temp);
+            int i = 1;
+            while (temp[i] != '\n')
+            {
+                putchar(temp[i]);
+                i++;
+            }
         }
         char mode = temp[1];
-        char *addbegin = temp[3];
+        char *addbegin = temp + 3;
         int address = hexTodec(addbegin);
         switch (mode)
         {
         case 'L':
             load(address, b, s, set, E, time);
-            printf("\n");
+            if (flag)
+                printf("\n");
             break;
         case 'S':
             load(address, b, s, set, E, time);
-            printf("\n");
+            if (flag)
+                printf("\n");
             break;
         case 'M':
             load(address, b, s, set, E, time);
             load(address, b, s, set, E, time);
-            printf("\n");
+            if (flag)
+                printf("\n");
             break;
         }
         time++;
     }
+    fclose(file);
+    free(set);
+    free(temp);
     printSummary(hit_count, miss_count, eviction_count);
     return 0;
 }
@@ -106,51 +126,51 @@ int hexTodec(char *hex)
         {
         case 'A':
         case 'a':
-            decimal = decimal * 10 + 10;
+            decimal = decimal * 16 + 10;
             break;
         case 'B':
         case 'b':
-            decimal = decimal * 10 + 11;
+            decimal = decimal * 16 + 11;
             break;
         case 'C':
         case 'c':
-            decimal = decimal * 10 + 12;
+            decimal = decimal * 16 + 12;
             break;
         case 'D':
         case 'd':
-            decimal = decimal * 10 + 13;
+            decimal = decimal * 16 + 13;
             break;
         case 'E':
         case 'e':
-            decimal = decimal * 10 + 14;
+            decimal = decimal * 16 + 14;
             break;
         case 'F':
         case 'f':
-            decimal = decimal * 10 + 15;
+            decimal = decimal * 16 + 15;
             break;
+        default:
+            decimal = decimal * 16 + num - '0';
         }
+
         temp++;
     }
+    return decimal;
 }
 
-void load(int address, int b, int s, const cache *set, int E, int time)
+void load(unsigned int address, unsigned int b, unsigned s, cache *set, unsigned E, int time)
 {
     for (int i = 0; i < b; i++)
     {
-        address /= 2;
+        address>>=1;
     }
-    int gindex = 0;
+    unsigned int gindex = 0;
     for (int i = 0; i < s; i++)
     {
         gindex = gindex * 2 + address % 2;
-        address /= 2;
+        address>>=1;
     }
-    int t = 0;
-    while (address)
-    {
-        t = t * 2 + address % 2;
-        address /= 2;
-    }
+    unsigned  t = address;
+
     //gindex = 3;那就从3*E 开始找起,4*E
     cache *search;
     int hasEmpty = 0;
@@ -176,12 +196,14 @@ void load(int address, int b, int s, const cache *set, int E, int time)
             if (flag)
             {
                 printf(" hit");
+                search->time = time;
                 hit_count++;
                 return;
             }
             else
             {
                 hit_count++;
+                search->time = time;
                 return;
             }
         }

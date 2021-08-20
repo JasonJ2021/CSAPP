@@ -65,3 +65,6 @@ getopt用法
                     exit(EXIT_FAILURE);
                 }
             }
+
+test
+    
