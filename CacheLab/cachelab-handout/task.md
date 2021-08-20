@@ -1,5 +1,6 @@
 # CacheLab
 
+## PartA Cache Simulator
 任务分解：
 1.程序参数的输入
 getopt function  
@@ -66,5 +67,48 @@ getopt用法
                 }
             }
 
-test
+
     
+
+## PartB Matrix Transpose
+目标是写出尽可能降低不命中率的倒置函数
+
+    char transpose_submit_desc[] = "Transpose submission";
+    void transpose_submit(int M, int N, int A[N][M], int B[M][N]);
+
+### 要求：
+- 编译没有警告
+- 最多可以定义12个int 变量在每个倒置函数中
+- 不能用迭代
+- 如果用了helper functions ,helper functions 和 transpose func 加起来的变量不能超过12个
+- 不能修改数组A
+
+### Evaluation For PartB
+
+    • 32 × 32 (M = 32, N = 32)
+    • 64 × 64 (M = 64, N = 64)
+    • 61 × 67 (M = 61, N = 67)
+    • 32 × 32: 8 points if m < 300, 0 points if m > 600
+    • 64 × 64: 8 points if m < 1, 300, 0 points if m > 2, 000
+    • 61 × 67: 10 points if m < 2, 000, 0 points if m > 3, 000
+
+使用的cache规模是(s = 5, E = 1, b = 5).
+
+    linux> make
+    linux> ./test-trans -M 32 -N 32
+### Working on PartB
+
+可以自己写多种版本的transfunctions,每个的格式如下：
+
+    char trans_simple_desc[] = "A simple transpose";
+    void trans_simple(int M, int N, int A[N][M], int B[M][N])
+    {
+    /* your transpose code here */
+    }
+    --------------------------------------------------------------
+    registerTransFunction(trans_simple, trans_simple_desc);
+
+改进建议：
+1.因为是直接映射cache，所以冲突不命中是一个主要的问题
+2.分块是一个好办法
+3.可以使用./csim-ref -v -s 5 -E 1 -b 5 -t trace.f0 来查看具体的情况
