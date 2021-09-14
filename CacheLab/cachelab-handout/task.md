@@ -112,3 +112,32 @@ getopt用法
 1.因为是直接映射cache，所以冲突不命中是一个主要的问题
 2.分块是一个好办法
 3.可以使用./csim-ref -v -s 5 -E 1 -b 5 -t trace.f0 来查看具体的情况
+
+对角线上会多一次Miss
+
+    L 10d080,4 miss eviction //会导致一个miss
+    L 10d084,4 hit 
+    L 10d088,4 hit 
+    L 10d08c,4 hit 
+    L 10d090,4 hit 
+    L 10d094,4 hit 
+    L 10d098,4 hit 
+    L 10d09c,4 hit 
+    S 14d080,4 miss eviction //第一个对角线元素冲突
+    S 14d100,4 miss 
+    S 14d180,4 miss 
+    S 14d200,4 miss 
+    S 14d280,4 miss 
+    S 14d300,4 miss 
+    S 14d380,4 miss 
+    S 14d400,4 miss 
+    L 10d100,4 miss eviction 
+    L 10d104,4 hit 
+    L 10d108,4 hit 
+    L 10d10c,4 hit 
+    L 10d110,4 hit 
+    L 10d114,4 hit 
+    L 10d118,4 hit 
+    L 10d11c,4 hit 
+    S 14d084,4 hit 
+    S 14d104,4 miss eviction //第二个对角线元素冲突

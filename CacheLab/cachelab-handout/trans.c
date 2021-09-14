@@ -22,15 +22,15 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
-    int j, k, kk;
+    int i, j, k;
     int a0, a1, a2, a3, a4, a5, a6, a7;
     if (M == 32)
     {
-        for (kk = 0; kk < 32; kk += 8)
+        for (i = 0; i < 32; i += 8)
         {
             for (j = 0; j < 32; j += 8)
             {
-                for (k = kk; k < kk + 8; k++)
+                for (k = i; k < i + 8; k++)
                 {
                     a0 = A[k][j];
                     a1 = A[k][j + 1];
@@ -54,20 +54,60 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
     }
     else if (M == 64)
     {
-        for (kk = 0; kk < 64; kk += 4)
+        for (i = 0; i < 64; i += 8)
         {
-            for (j = 0; j < 64; j += 4)
+            for (j = 0; j < 64; j += 8)
             {
-                for (k = kk; k < kk + 4; k++)
+                for (k = j; k < j + 4; ++k)
                 {
-                    a0 = A[k][j];
-                    a1 = A[k][j + 1];
-                    a2 = A[k][j + 2];
-                    a3 = A[k][j + 3];
-                    B[j][k] = a0;
-                    B[j + 1][k] = a1;
-                    B[j + 2][k] = a2;
-                    B[j + 3][k] = a3;
+                    a0 = A[k][i];
+                    a1 = A[k][i + 1];
+                    a2 = A[k][i + 2];
+                    a3 = A[k][i + 3];
+                    a4 = A[k][i + 4];
+                    a5 = A[k][i + 5];
+                    a6 = A[k][i + 6];
+                    a7 = A[k][i + 7];
+                    B[i][k] = a0;
+                    B[i + 1][k] = a1;
+                    B[i + 2][k] = a2;
+                    B[i + 3][k] = a3;
+                    B[i][4 + k] = a4;
+                    B[i + 1][4 + k] = a5;
+                    B[i + 2][4 + k] = a6;
+                    B[i + 3][4 + k] = a7;
+                }
+                for (k = i; k < i + 4; ++k)
+                {
+                    a0 = B[k][j + 4];
+                    a1 = B[k][j + 5];
+                    a2 = B[k][j + 6];
+                    a3 = B[k][j + 7];
+                    a4 = A[j + 4][k];
+                    a5 = A[j + 5][k];
+                    a6 = A[j + 6][k];
+                    a7 = A[j + 7][k];
+
+                    B[k][j + 4] = a4;
+                    B[k][j + 5] = a5;
+                    B[k][j + 6] = a6;
+                    B[k][j + 7] = a7;
+                    B[k + 4][j] = a0;
+                    B[k + 4][j + 1] = a1;
+                    B[k + 4][j + 2] = a2;
+                    B[k + 4][j + 3] = a3;
+                }
+                for (k = i + 4; k < i + 8; ++k)
+                {
+                    a0 = A[j + 4][k];
+                    a1 = A[j + 5][k];
+                    a2 = A[j + 6][k];
+                    a3 = A[j + 7][k];
+
+                    B[k][j + 4] = a0;
+                    B[k][j + 5] = a1;
+                    B[k][j + 6] = a2;
+                    B[k][j + 7] = a3;
                 }
             }
         }
@@ -110,7 +150,6 @@ void registerFunctions()
     registerTransFunction(transpose_submit, transpose_submit_desc);
 
     /* Register any additional transpose functions */
-    registerTransFunction(trans, trans_desc);
 }
 
 /* 
