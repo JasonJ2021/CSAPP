@@ -1,0 +1,1 @@
+static char *mem_heap;
