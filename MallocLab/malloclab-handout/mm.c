@@ -62,10 +62,9 @@ team_t team = {
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE((char *)(bp)-DSIZE)) /* given block ptr bp, compute address of prev blocks */
 #define GET_PREV(bp) (*(unsigned int *)(bp))
 #define GET_NEXT(bp) (*((unsigned int *)(bp) + 1))
-#define SET_PREV(bp, val) (GET_PREV(bp) = (val))
-#define SET_NEXT(bp, val) (GET_NEXT(bp) = (val))
+#define SET_PREV(bp, val) (*(unsigned int *)(bp) = (val))
+#define SET_NEXT(bp, val) (*((unsigned int *)(bp)+1) = (val))
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
-static char *heap_listp;
 void *mm_malloc(size_t size);
 void mm_free(void *ptr);
 int mm_init(void);
@@ -77,18 +76,19 @@ static void *next_fit(size_t asize);
 static void place(void *bp, size_t asize);
 static char *prev_listp; //记录上一个block的位置
 static void *best_fit(size_t asize);
-static char *list_start;
+static char *list_start = NULL;
+static char *heap_listp = NULL;
 /* 
  * mm_init - initialize the malloc package.
  */
 
 int mm_init(void)
 {
-    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(12 * WSIZE)) == (void *)-1)
     {
         return -1;
     }
-    PUT(heap_listp, 0); //4~31
+    PUT(heap_listp, 0);             //4~31
     PUT(heap_listp + 1 * WSIZE, 0); //32~63
     PUT(heap_listp + 2 * WSIZE, 0); //64~127
     PUT(heap_listp + 3 * WSIZE, 0); //128~255
@@ -110,35 +110,35 @@ int mm_init(void)
 }
 static int getListID(size_t size)
 {
-    if (4 <= size && size <= 31)
+    if (size <= 32)
     {
         return 0;
     }
-    else if (32 <= size && size <= 63)
+    else if (size <= 64)
     {
         return 1;
     }
-    else if (64 <= size && size <= 127)
+    else if (size <= 128)
     {
         return 2;
     }
-    else if (128 <= size && size <= 255)
+    else if (size <= 256)
     {
         return 3;
     }
-    else if (256 <= size && size <= 511)
+    else if (size <= 512)
     {
         return 4;
     }
-    else if (512 <= size && size <= 1023)
+    else if (size <= 1024)
     {
         return 5;
     }
-    else if (1024 <= size && size <= 2047)
+    else if (size <= 2048)
     {
         return 6;
     }
-    else if (2048 <= size && size <= 4095)
+    else if (size <= 4096)
     {
         return 7;
     }
@@ -154,7 +154,7 @@ static void insert_list(void *ptr)
         return;
     }
     int id = getListID(GET_SIZE(HDRP(ptr)));
-    char *bp = list_start + id;
+    void *bp = list_start + id * WSIZE;
     void *prev = bp;
     void *next = GET(bp);
     while (next != NULL)
@@ -187,7 +187,7 @@ static void remove_list(void *ptr)
     if (ptr == NULL || GET_ALLOC(ptr))
         return;
     int id = getListID(GET_SIZE(HDRP(ptr)));
-    void *root = list_start + id;
+    void *root = list_start + id * WSIZE;
     void *prev = GET_PREV(ptr);
     void *next = GET_NEXT(ptr);
     if (prev == NULL)
@@ -198,7 +198,7 @@ static void remove_list(void *ptr)
     }
     else
     {
-        SET_NEXT(ptr, next);
+        SET_NEXT(prev, next);
         if (next != NULL)
             SET_PREV(next, prev);
     }
@@ -245,13 +245,14 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
-    if(ptr == NULL)return;
+    if (ptr == NULL)
+        return;
     size_t size = GET_SIZE(HDRP(ptr));
     PUT(HDRP(ptr), PACK(size, 0));
     PUT(FTRP(ptr), PACK(size, 0));
     //从分配块转换到空闲块需要把PREV NEXT置零
-    SET_NEXT(ptr,0);
-    SET_PREV(ptr,0);
+    SET_NEXT(ptr, 0);
+    SET_PREV(ptr, 0);
     coalesce(ptr);
 }
 
@@ -286,8 +287,8 @@ static void *extend_heap(size_t words)
     }
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
-    SET_NEXT(bp,0);
-    SET_PREV(bp,0);
+    SET_NEXT(bp, 0);
+    SET_PREV(bp, 0);
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
     return coalesce(bp);
 }
@@ -299,11 +300,9 @@ static void *coalesce(void *bp)
     if (prev_alloc && next_alloc)
     {
         insert_list(bp);
-        return bp;
     }
     if (prev_alloc && !next_alloc)
     {
-        remove_list(bp);
         remove_list(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
@@ -312,7 +311,6 @@ static void *coalesce(void *bp)
     }
     if (!prev_alloc && next_alloc)
     {
-        remove_list(bp);
         remove_list(PREV_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
@@ -324,7 +322,6 @@ static void *coalesce(void *bp)
     {
         remove_list(PREV_BLKP(bp));
         remove_list(NEXT_BLKP(bp));
-        remove_list(bp);
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
@@ -339,7 +336,7 @@ static void *first_fit(size_t asize)
     void *bp;
     while (id <= 8)
     {
-        for (bp = GET(list_start + id); bp != NULL; bp = GET_NEXT(bp))
+        for (bp = GET(list_start + id*WSIZE); bp != NULL; bp = GET_NEXT(bp))
         {
             if (GET_SIZE(HDRP(bp)) >= asize)
             {
@@ -406,8 +403,8 @@ static void place(void *bp, size_t asize)
         void *new_bp = NEXT_BLKP(bp); //不能修改原来的bp
         PUT(HDRP(new_bp), PACK(size - asize, 0));
         PUT(FTRP(new_bp), PACK(size - asize, 0));
-        SET_NEXT(new_bp,0);
-        SET_PREV(new_bp,0);
+        SET_NEXT(new_bp, 0);
+        SET_PREV(new_bp, 0);
         insert_list(new_bp);
     }
     else
