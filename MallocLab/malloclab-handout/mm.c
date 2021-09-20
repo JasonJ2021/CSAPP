@@ -63,7 +63,7 @@ team_t team = {
 #define GET_PREV(bp) (*(unsigned int *)(bp))
 #define GET_NEXT(bp) (*((unsigned int *)(bp) + 1))
 #define SET_PREV(bp, val) (*(unsigned int *)(bp) = (val))
-#define SET_NEXT(bp, val) (*((unsigned int *)(bp)+1) = (val))
+#define SET_NEXT(bp, val) (*((unsigned int *)(bp) + 1) = (val))
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 void *mm_malloc(size_t size);
 void mm_free(void *ptr);
@@ -154,33 +154,15 @@ static void insert_list(void *ptr)
         return;
     }
     int id = getListID(GET_SIZE(HDRP(ptr)));
-    void *bp = list_start + id * WSIZE;
-    void *prev = bp;
-    void *next = GET(bp);
-    while (next != NULL)
-    {
-        if (GET_SIZE(HDRP(next)) >= GET_SIZE(HDRP(ptr)))
-            break;
-        prev = next;
-        next = GET_NEXT(next);
+    void *root = list_start + id * WSIZE;
+    void *next = GET(root);
+    PUT(root,ptr);
+    SET_PREV(ptr,NULL);
+    SET_NEXT(ptr,next);
+    if(next != NULL){
+        SET_PREV(next,ptr);
     }
     //因为根节点只有4字节，所以需要特殊处理
-    if (prev == bp)
-    {
-        PUT(prev, ptr);
-        SET_PREV(ptr, NULL);
-        SET_NEXT(ptr, next);
-        if (next != NULL)
-            SET_PREV(next, ptr);
-    }
-    else
-    {
-        SET_NEXT(prev, ptr);
-        SET_PREV(ptr, prev);
-        SET_NEXT(ptr, next);
-        if (next != NULL)
-            SET_PREV(next, ptr);
-    }
 }
 static void remove_list(void *ptr)
 {
@@ -336,7 +318,7 @@ static void *first_fit(size_t asize)
     void *bp;
     while (id <= 8)
     {
-        for (bp = GET(list_start + id*WSIZE); bp != NULL; bp = GET_NEXT(bp))
+        for (bp = GET(list_start + id * WSIZE); bp != NULL; bp = GET_NEXT(bp))
         {
             if (GET_SIZE(HDRP(bp)) >= asize)
             {
