@@ -1,3 +1,20 @@
+编译时记得加 **-lpthread**
+
+- [11.4 套接字接口～](#114-套接字接口)
+  - [11.4.1 套接字地址结构](#1141-套接字地址结构)
+  - [11.4.2 socket函数](#1142-socket函数)
+  - [11.4.3 connect函数](#1143-connect函数)
+  - [11.4.4 bind函数](#1144-bind函数)
+  - [11.4.5 listen函数](#1145-listen函数)
+  - [11.4.6 accept函数](#1146-accept函数)
+  - [11.4.7 主机和服务的转换](#1147-主机和服务的转换)
+    - [1.getaddrinfo函数](#1getaddrinfo函数)
+    - [2.getnameinfo函数](#2getnameinfo函数)
+  - [11.4.8 套接字接口的辅助函数](#1148-套接字接口的辅助函数)
+    - [1.open_clientfd函数](#1open_clientfd函数)
+    - [2.open_listenfd函数](#2open_listenfd函数)
+  
+---
 
 ### 11.3.1 IP地址
 一个IP地址是32位无符号整数
@@ -101,6 +118,7 @@ socket返回的描述符是部分打开的，不能用于读写，如何打开�
 ### 11.4.3 connect函数
     int connect(int clientfd , const struct sockaddr_in *addr , socklen_t addrlen);
 这时候connect函数正在尝试与套接字地址为addr的服务器建立连接,addrlen为sizeof(sockaddr_in).connect函数会阻塞，一直到连接成功或者发生错误
+成功为0，错误返回-1
 ### 11.4.4 bind函数
     int bind(int sockfd , const struct sockaddr_in *addr , socklen_t addrlen);
 bind 函数告诉内核把addr中的服务器套接字地址和套接字描述符sockfd联系起来,addrlen = sizeof(sockaddr_in)
@@ -113,3 +131,105 @@ backlog一般把他设置为一个较大的数例如1024
     int accept(int listenfd , struct sockaddr *addr , int *addrlen);
 accept等待客户端请求到达listenfd,然后在addr中填写客户端的套接字地址，并且返回一个连接套接字
 关于为什么要区分连接套接字和监听套接字，主要是为了实现并发服务器。
+
+### 11.4.7 主机和服务的转换
+#### 1.getaddrinfo函数
+    int getaddrinfo(const char *host,const char *service , const struct addrinfo *hints,struct addrinfo **result);
+
+    void freeaddrinfo(struct addrinfo *result);
+
+    const char *gai_strerror(int errcode);
+    ----------------------
+    成功返回0 否则返回非零的数;
+
+给定host 和service 事实上只需要给定一个就可以，另外一个设置为空指针
+getaddrinfo返回result,指向一个addrinfo的链表，其中每个结构指向一个对应于host和service的套接字接口
+最后要把链表空间释放，使用freeaddrinfo
+如果出现了错误信息，可以使用gai_strerror打印错误信息.
+host可以是域名也可以是数字地址，service也是这样
+hints是一个addrinfo结构，提供对getaddrinfo返回的套接字地址链表更好的控制。如果要传递hints参数，只能设置：ai_family、ai_socktype、ai_protocol和ai_flags。其他必须设置为0.
+我们可以使用memset函数来把整个结构清零.
+- getaddrinfo可以返回ipv4 / ipv6地址，设置ai_family 为AF_INET / AF_INET6
+- 把ai_socktype设置为SOCK_STREAM限定列表为连接
+- ai_flags是一个位掩码，以下是推荐值
+  - AI_ADDRCONFIG   推荐
+  - AI_CANONNAME 把第一个addrinfo的ai_canonname指向host的官方名字
+  - AI_PASSIVE  告诉函数返回的套接字地址可能是服务端的，在这种情况下,host被设置为NULL
+  - AI_NUMERICSERV 强制service为端口号
+  
+        struct addrinfo{
+            int ai_flags;
+            int ai_family;
+            int ai_socktype;
+            int ai_protocol;
+            char *ai_canonname;
+            size_t ai_addrlen;
+            struct sockaddr *ai_addr;
+            struct addrinfo *ai_next;
+        }
+#### 2.getnameinfo函数
+    int getnameinfo(const struct sockaddr *sa , socklen_t salen , 
+                    char *host , size_t hostlen,
+                    char *service , size_t servlen,int flags);
+sa指向大小为salen字节的套接字地址结构
+host是一个hostlen字节的缓冲区，service同理。
+getnameinfo把sa转换成对应的主机和服务字符串复制到相应缓冲区.
+
+flags 是一个掩码
+- NI_NUMERICHOST getnameinfo默认返回host中的域名。设置该标志会使其返回一个数字字符串
+- NI_NUMERICSERV getnameinfo默认会检查/etc/services，返回服务名。设置该标志会返回端口号
+### 11.4.8 套接字接口的辅助函数
+#### 1.open_clientfd函数
+    int open_clientfd(char *hostname , char *service){
+        int clientfd ; 
+        struct addrinfo *p , *listp , hint;
+        memset(&hint , 0 , sizeof(struct addrinfo));
+        hint.ai_socktype = SOCK_STREAM;
+        hint.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV
+        Getaddrinfo(host,service , &hint , &listp);
+        for(p = listp ; p;p = p->ai_next){
+            if((clientfd = socket(p->family , p->socktype , p->protocol))< 0){
+                continue ; 
+            }
+            if((connect(clientfd,p->ai_addr , p->ai_addrlen)) == 0){
+                break;
+            }
+            Close(clientfd);
+        }
+        Freeaddrinfo(listp);
+        if(!p){
+            return -1;
+        }else{
+            return clientfd;
+        }
+    }
+----
+#### 2.open_listenfd函数
+    int open_listenfd(char *service){
+        int listenfd ; 
+        struct addrinfo *p , *listp , hint;
+        memset(&hint , 0 , sizeof(struct addrinfo));
+        hint.ai_socktype = SOCK_STREAM;
+        hint.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV | AI_PASSIVE;
+        Getaddrinfo(NULL ,service , &hint , &listp);
+        for(p = listp ; p;p = p->ai_next){
+            if((listenfd  = socket(p->family , p->socktype , p->protocol))< 0){
+                continue ; 
+            }
+            Setsockopt(listenfd , SOL_SOCKET,SO_REUSEADDR , (const void *)&optval , sizeof(int));
+            if((bind(listenfd,p->ai_addr , p->ai_addrlen)) == 0){
+                break;
+            }
+            Close(clientfd);
+        }
+        Freeaddrinfo(listp);
+        if(!p){
+            return -1;
+        }
+        if(listen(listenfd , 1024) < 0 ){
+            Close(listenfd );
+            return -1;
+        }else{
+            return listenfd ;
+        }
+    }
