@@ -13,6 +13,17 @@
   - [11.4.8 套接字接口的辅助函数](#1148-套接字接口的辅助函数)
     - [1.open_clientfd函数](#1open_clientfd函数)
     - [2.open_listenfd函数](#2open_listenfd函数)
+- [11.5 Web服务器](#115-web服务器)
+  - [11.5.1 Web基础](#1151-web基础)
+  - [11.5.2 Web内容](#1152-web内容)
+  - [11.5.3 HTTP事务](#1153-http事务)
+    - [1.HTTP请求](#1http请求)
+    - [2.HTTP响应](#2http响应)
+  - [11.5.4 服务动态内容](#1154-服务动态内容)
+    - [1.客户端如何把程序参数传送给服务器](#1客户端如何把程序参数传送给服务器)
+    - [2.服务器如何把参数传递给他所创建的子进程](#2服务器如何把参数传递给他所创建的子进程)
+    - [3.服务器如何将子进程生成内容所需要的其他信息传递给子进程](#3服务器如何将子进程生成内容所需要的其他信息传递给子进程)
+    - [4.子进程将他的输出传递到哪里](#4子进程将他的输出传递到哪里)
   
 ---
 
@@ -233,3 +244,76 @@ flags 是一个掩码
             return listenfd ;
         }
     }
+
+## 11.5 Web服务器
+### 11.5.1 Web基础
+Web客户端和服务器之间交互基于HTTP协议(Hypertext Transfer protocol , 超文本传输协议).一个Web客户端(浏览器)打开一个到服务器的internet connection ,请求某些内容，服务器相应请求，关闭连接。浏览器读取内容，并且显示到屏幕上
+Web内容可以由HTML编写,告诉浏览器如何显示这页的文本和图形.HTMP强大之处在于一个页面可以包含指针（超链接）指向任何存放在因特网主机上的内容。
+
+    <a herf = "http://www.cmu.edu/index.html" > Carnegie Mellon</a>
+创建了一个超链接，指向CMU web服务器上index.html的html文件
+### 11.5.2 Web内容
+Web服务器以两种方式向客户端提供内容
+1. 取一个磁盘文件，并把它的内容返回给客户端。磁盘文件称为静态内容，返回文件给客户端的过程称为服务静态内容
+2. 运行一个可知性文件，并把输出返回给客户端。动态内容/服务动态内容
+   
+每条由Web服务器返回的内容都是与它管理的某个文件相关的，这些文件每一个都有一个唯一的名字,URL(Universal Resource Locator , 通用资源定位符).
+    
+    http://bluefish.ics.cs.cmu.edu:8000/cgi-bin/adder?15000&213
+端口号是可选的默认为HTTP知名端口80
+上面这个URL标志了一个cgi-bin/adder的可执行文件，？用来分隔文件名和参数，&用来分隔不同的参数
+在事务过程中，客户端用前缀，服务端用后缀
+
+### 11.5.3 HTTP事务
+HTTP是基于在因特网连接上传送文本行的，可以使用Linux 的TELNET来和因特网上任何Web服务器执行事务
+
+      jasonj@laptopofjason:~$ telnet www.aol.com 80
+      Trying 2001:4998:24:604::9000...
+      Connected to media-router-aol1.prod.g03.yahoodns.net.
+      Escape character is '^]'.
+      GET / HTTP/1.1
+      Host: www.aol.com
+每次我们输入一个文本行，打回车键，TELNET会读取该行，在后面加上\r\n，发送到服务器
+
+#### 1.HTTP请求
+组成：
+- 一个请求行(request line)
+- 另个或多个请求报头（request header)
+- 空的文本行终止报头列表
+
+>请求行格式：*method URI version*
+HTTP方法：GET,POST,OPTIONS,HEAD,PUT,DELETE,TRACE
+GET方法指导服务器生成和返回URI(Uniform Resource Identifier)标志的内容.URI是URL的后缀，包括文件名和可选参数
+version表明该请求使用的HTTP版本，HTTP/1.1 是比较新的版本
+
+>请求报头格式
+header-name : header-data
+这里我们只关心Host报头。proxy cache(代理缓存)会使用Host报头，它有时候会作为浏览器和原始Web服务器的中介，Host报头数据指明了原始服务器的域名，使的PROXY CHAIN中的RPXY CACHE判断它是否可以在本地缓存中有一个副本
+
+#### 2.HTTP响应
+组成：
+一个响应行：version status-code status-message
+*个报头
+终止报头的空行
+响应主体
+
+### 11.5.4 服务动态内容
+一个服务器如何向客户端提供动态内容？我们有下列疑问
+- 客户端如何把程序参数传送给服务器
+- 服务器如何把参数传递给他所创建的子进程
+- 服务器如何将子进程生成内容所需要的其他信息传递给子进程
+- 子进程将他的输出传递到哪里
+
+CGI(Common Gateway Interface ,通用网关接口)解决了这些问题
+#### 1.客户端如何把程序参数传送给服务器
+GET请求的参数在URI中传递
+#### 2.服务器如何把参数传递给他所创建的子进程
+    GET /cgi-bin/addr?15000&213 HTTP/1.1
+它会调用fork来创建一个子进程，并调用execve执行adder程序（CGI程序）在调用之前，会把CGI环境变量QUERY_STRING设置为15000&213
+adder可以在运行时用getenv来引用
+#### 3.服务器如何将子进程生成内容所需要的其他信息传递给子进程
+环境变量
+#### 4.子进程将他的输出传递到哪里
+在子进程加载并运行CGI之前，它使用Linux dup2把stdout重定向到和客户端相关联的已连接描述符。
+父进程不知道生成内容的type and contend length，所以子进程需要生成Content-type 和Content-length响应报头，以及终止报头的空行。
+
