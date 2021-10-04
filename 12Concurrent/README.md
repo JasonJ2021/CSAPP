@@ -25,6 +25,7 @@
       - [2. 读者-写者问题](#2-读者-写者问题)
         - [第一类读者写者问题：](#第一类读者写者问题)
     - [12.5.5 基于预线程化的并发服务器](#1255-基于预线程化的并发服务器)
+  - [12.6 使用线程提高并行性](#126-使用线程提高并行性)
 ## 12 Concurrent Programming
 ### 12.2  基于I/O多路复用的并发编程
 现在我们echo服务器要求能够对用户从stdin输入的交互命令作出相应，因此这时候服务器要响应两个IO事件
@@ -567,3 +568,66 @@ void writer(void){
             Rio_writen(connfd,buf,n);
         }
     }
+
+### 12.6 使用线程提高并行性
+大多数现代机器都有多个核，并发程序在这样的机器上运行地更快，因为内核在多个核上并行的调度这些线程。
+并发程序包括并行程序；
+
+    #include "csapp.h"
+    #define MAXTHREADS 32
+    long gsum = 0;
+    long nelems_per_thread;
+    sem_t mutex;
+    void *sum_mutex(void *var);
+    #include <time.h>
+    int main(int argc , char *argv[]){
+        pthread_t tid[MAXTHREADS];
+        long nthreads,log_nelems,i,nelems,myid[MAXTHREADS];
+        if(argc != 3){
+            fprintf(stderr , "usage : %s <nthreads> <long_nelems>\n",argv[0]);
+            exit(0);
+        }
+        
+        clock_t start_t,finish_t;
+        double total_t = 0;
+        start_t = clock();
+
+
+        nthreads = atoi(argv[1]);
+        log_nelems = atoi(argv[2]);
+        nelems = (1L << log_nelems);
+        nelems_per_thread = nelems / nthreads;
+        sem_init(&mutex,0,1);
+        for(i = 0 ; i < nthreads ; i++){
+            myid[i] = i;
+            Pthread_create(&tid[i],NULL,sum_mutex,&myid[i]);
+        }
+        for(i = 0 ; i < nthreads ; i++){
+            Pthread_join(tid[i],NULL);
+        }
+        finish_t = clock();
+        total_t = (double)(finish_t - start_t) / CLOCKS_PER_SEC;//将时间转换为秒
+        printf("CPU 占用的总时间：%f\n", total_t);
+        if(gsum != (nelems *(nelems - 1))/2){
+            printf("Error : result = %ld\n",gsum);
+        }
+        exit(0);
+    }
+    void *sum_mutex(void *var){
+        long i,start,end;
+        long myid = *((long *)var);
+        start = myid * nelems_per_thread;
+        end = start + nelems_per_thread;
+        for(i = start ; i < end ;i++){
+            P(&mutex);
+            gsum+=i;
+            V(&mutex);
+        }
+        return NULL;
+    }
+
+    jasonj@laptopofjason:~/Desktop/CSAPP/12Concurrent$ ./psum 1 31
+    CPU 占用的总时间：21.142562
+    jasonj@laptopofjason:~/Desktop/CSAPP/12Concurrent$ ./psum 2 31
+    CPU 占用的总时间：270.740275
+**同步开销巨大，要尽可能避免，如果无法避免，要用尽可能多的有用计算弥补开销**
